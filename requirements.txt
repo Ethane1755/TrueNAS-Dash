@@ -1,3 +1,6 @@
 flask
 requests
 python-dotenv
+flask-socketio
+paramiko
+eventlet

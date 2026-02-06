@@ -1,6 +1,9 @@
 # Based on TrueNAS API v25.10.2 specifications
 from __future__ import annotations
 
+import eventlet
+eventlet.monkey_patch()
+
 import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -8,15 +11,22 @@ from urllib.parse import urlparse
 import time
 from functools import lru_cache
 import concurrent.futures
+import base64
+import io
 
 import urllib3
 import requests
+import threading
+import paramiko
+from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'secret!')
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 log_dir = Path(__file__).parent / "logs"
 log_dir.mkdir(exist_ok=True)
@@ -735,5 +745,151 @@ def _get_truenas_net_stats(identifier: str) -> dict | None:
         return None
 
 
+# --- SSH WebSocket Logic ---
+
+ssh_client = None
+ssh_channel = None
+
+@socketio.on('connect', namespace='/ssh')
+def connect_ssh():
+    """Client connected via WebSocket"""
+    print("Client connected via WebSocket")
+    # 強制重置連線，確保每次進入 Terminal 都是新的 Session
+    global ssh_client, ssh_channel
+    if ssh_client:
+        try:
+            ssh_client.close()
+        except:
+            pass
+    ssh_client = None
+    ssh_channel = None
+    init_ssh_connection()
+
+@socketio.on('input', namespace='/ssh')
+def handle_ssh_input(data):
+    """Forward input to SSH"""
+    global ssh_channel
+    if ssh_channel and not ssh_channel.closed:
+        try:
+            ssh_channel.send(data)
+        except Exception as e:
+            print(f"Error sending to SSH: {e}")
+
+@socketio.on('resize', namespace='/ssh')
+def handle_ssh_resize(data):
+    """Resize terminal"""
+    global ssh_channel
+    if ssh_channel and not ssh_channel.closed:
+        try:
+            ssh_channel.resize_pty(width=data['cols'], height=data['rows'])
+        except Exception as e:
+            print(f"Error resizing SSH pty: {e}")
+
+def start_ssh_listener():
+    """Background thread to read from SSH and emit to SocketIO"""
+    global ssh_channel
+    print("SSH Listener Started")
+    
+    while ssh_channel and not ssh_channel.closed:
+        try:
+            if ssh_channel.recv_ready():
+                data = ssh_channel.recv(1024).decode('utf-8', errors='ignore')
+                socketio.emit('output', data, namespace='/ssh')
+            else:
+                socketio.sleep(0.01)
+        except Exception as e:
+            print(f"SSH Read Error: {e}")
+            break
+
+def init_ssh_connection():
+    global ssh_client, ssh_channel
+    
+    host = TRUENAS_HOST
+    user = os.getenv('SSH_USER', 'root')
+    
+    # 讀取並解碼私鑰
+    b64_key = os.getenv('SSH_PRIVATE_KEY_B64')
+    password = os.getenv('SSH_PASSWORD')
+    
+    try:
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 關鍵修改：從字串載入私鑰
+        if b64_key:
+            # 1. 解碼 Base64 回原本的 PEM/OpenSSH 格式
+            key_str = base64.b64decode(b64_key).decode('utf-8')
+            # 2. 轉換成 Paramiko 認得的 Key 物件
+            # 嘗試檢測 Key 類型，預設嘗試 Ed25519，失敗則 RSA
+            try:
+                private_key = paramiko.Ed25519Key.from_private_key(io.StringIO(key_str))
+            except:
+                try:
+                    private_key = paramiko.RSAKey.from_private_key(io.StringIO(key_str))
+                except Exception as key_err:
+                     print(f"Failed to load private key: {key_err}")
+                     return
+
+            # 3. 使用 pkey 參數連線
+            print(f"Connecting with Private Key...")
+            ssh_client.connect(host, username=user, pkey=private_key)
+        else:
+            if not password:
+                print("SSH_PASSWORD or SSH_PRIVATE_KEY_B64 not set. Terminal will not function.")
+                return
+            # Fallback: 如果沒設 Key，試著用密碼
+            print(f"Connecting with Password...")
+            ssh_client.connect(host, username=user, password=password)
+
+        
+        ssh_channel = ssh_client.invoke_shell(term='xterm')
+        
+        # 延遲一點點時間讓 Shell 準備好
+        socketio.sleep(0.5)
+
+        # 傳送 Enter 喚醒 Shell，避免初始卡頓
+        ssh_channel.send('\n')
+
+        # Prompt 設定：
+        # 1. 亮綠色 (%F{10}) User@Host
+        # 2. 分隔符號保留 ":" (User 請求)
+        # 3. 淺藍色 (%F{14}) Path，並透過變數替換確保 "/mnt" 顯示為 "~/mnt"
+        # 需啟用 prompt_subst
+        ssh_channel.send("setopt prompt_subst\n")
+        
+        # 複雜的 Zsh 變數替換邏輯：
+        # ${PWD/#$HOME/~} -> 把開頭的 Home 路徑換成 ~
+        # ${ ... /#\//~/ } -> 如果結果開頭還是 / (絕對路徑)，把 / 換成 ~/
+        prompt_style = r"'%F{10}%n@%m%f:%F{14}${${PWD/#$HOME/~}/#\//~/}%f %# '"
+        
+        # 設定當前使用者的 Prompt
+        ssh_channel.send(f"export PS1={prompt_style}\n")
+        
+        # 注入 sudo wrapper 函式
+        # 使用 env 傳遞 PS1 並加入 -o prompt_subst
+        sudo_wrapper = f"""
+sudo() {{
+    if [ "$1" = "-i" ]; then
+        command sudo -i env PS1={prompt_style} zsh --no-rcs -o prompt_subst
+    else
+        command sudo "$@"
+    fi
+}}
+"""
+        ssh_channel.send(sudo_wrapper)
+        ssh_channel.send("export TERM=xterm-256color\n")
+        ssh_channel.send("clear\n")
+
+        socketio.start_background_task(target=start_ssh_listener)
+        
+        print("SSH Connection Established")
+    except Exception as e:
+        print(f"SSH Connection Failed: {e}")
+
+# Attempt to connect on startup
+init_ssh_connection()
+
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5003, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5003, debug=True, allow_unsafe_werkzeug=True)

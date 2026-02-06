@@ -8,11 +8,23 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon.png') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Xterm.js & Socket.IO -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
     />
     <style>
+      @font-face {
+          font-family: 'MesloLGS NF';
+          src: url('https://cdn.jsdelivr.net/gh/romkatv/powerlevel10k-media@master/MesloLGS%20NF%20Regular.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+      }
+
       .liquid-glass {
           /* Distortion Filter from User Request */
           backdrop-filter: blur(4px) url(#liquid_glass_filter);
@@ -92,7 +104,20 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 flex p-6 gap-6">
+    <main class="flex-1 flex flex-col p-6 gap-6 relative">
+      
+      <!-- Tab Navigation -->
+      <div class="flex gap-4 mb-2 z-20 shrink-0">
+          <button id="tab-dashboard" onclick="switchView('dashboard')" class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 px-4 py-2 rounded-lg font-bold hover:bg-cyan-500/30 transition-all backdrop-blur-md shadow-lg">
+             <i class="fa-solid fa-gauge mr-2"></i>Dashboard
+          </button>
+          <button id="tab-terminal" onclick="switchView('terminal')" class="bg-slate-800/40 text-slate-400 border border-slate-700/50 px-4 py-2 rounded-lg font-bold hover:bg-slate-700/50 transition-all backdrop-blur-md hover:text-slate-200">
+             <i class="fa-solid fa-terminal mr-2"></i>Terminal
+          </button>
+      </div>
+
+      <!-- Dashboard View -->
+      <div id="dashboard-view" class="flex-1 flex gap-6 w-full h-full overflow-hidden">
       
       <!-- Middle-Left Column: Storage (Donuts) -->
       <section class="w-3/12 flex flex-col gap-6 h-full">
@@ -215,6 +240,13 @@
 
         </div>
       </section>
+      </div> <!-- End Dashboard View -->
+
+      <!-- Terminal View -->
+      <div id="terminal-view" class="hidden flex-1 w-full h-full liquid-glass rounded-2xl p-4 relative overflow-hidden flex flex-col">
+         <!-- Terminal Container -->
+         <div id="terminal-container" class="w-full h-full rounded-xl bg-black/80 backdrop-blur-none border border-white/5 p-2 overflow-hidden"></div>
+      </div>
 
     </main>
 
@@ -641,6 +673,109 @@
       
       setInterval(fetchStats, 10000);
       setInterval(fetchMetrics, 2000); // Faster visual refresh for charts
+
+      // --- Tab & Terminal Logic ---
+      let term = null;
+      let socket = null;
+      let fitAddon = null;
+
+      function switchView(view) {
+          const dashView = document.getElementById('dashboard-view');
+          const termView = document.getElementById('terminal-view');
+          const tabDash = document.getElementById('tab-dashboard');
+          const tabTerm = document.getElementById('tab-terminal');
+
+          if (view === 'dashboard') {
+              dashView.classList.remove('hidden');
+              termView.classList.add('hidden');
+              
+              updateTabStyle(tabDash, true);
+              updateTabStyle(tabTerm, false);
+              
+              // 離開 Terminal 時，斷開連線並銷毀實例
+              if (socket) {
+                  socket.disconnect();
+                  socket = null;
+              }
+              if (term) {
+                  term.dispose();
+                  term = null;
+              }
+              fitAddon = null;
+              
+          } else {
+              dashView.classList.add('hidden');
+              termView.classList.remove('hidden');
+              
+              updateTabStyle(tabDash, false);
+              updateTabStyle(tabTerm, true);
+              
+              // 進入 Terminal 時，總是建立新的連線
+              if (!term) {
+                  // 稍微延遲以確保 DOM 可見
+                  setTimeout(initTerminal, 50);
+              }
+          }
+      }
+
+      function updateTabStyle(btn, isActive) {
+          if (isActive) {
+              btn.classList.add('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-500/50');
+              btn.classList.remove('bg-slate-800/40', 'text-slate-400', 'border-slate-700/50');
+          } else {
+              btn.classList.remove('bg-cyan-500/20', 'text-cyan-300', 'border-cyan-500/50');
+              btn.classList.add('bg-slate-800/40', 'text-slate-400', 'border-slate-700/50');
+          }
+      }
+
+      function initTerminal() {
+          const container = document.getElementById('terminal-container');
+          
+          // Clear container just in case
+          container.innerHTML = '';
+
+          term = new Terminal({
+              cursorBlink: true,
+              fontSize: 14,
+              fontFamily: '"MesloLGS NF", Menlo, Monaco, "Courier New", monospace',
+              theme: {
+                  background: '#00000000', // Transparent for glass effect (handled by container)
+                  foreground: '#e2e8f0',
+                  cursor: '#06b6d4'
+              },
+              allowProposedApi: true
+          });
+          
+          fitAddon = new FitAddon.FitAddon();
+          term.loadAddon(fitAddon);
+          
+          term.open(container);
+          fitAddon.fit();
+          
+          term.write('\x1b[38;5;75mConnecting to TrueNAS...\x1b[0m\r\n');
+
+          socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port + '/ssh');
+          
+          socket.on('connect', () => {
+               socket.emit('resize', { cols: term.cols, rows: term.rows });
+          });
+          
+          socket.on('output', (data) => {
+              term.write(data);
+          });
+          
+          term.onData(data => {
+              socket.emit('input', data);
+          });
+
+          // Resize handler
+          window.addEventListener('resize', () => {
+               if(term && !document.getElementById('terminal-view').classList.contains('hidden')) {
+                   fitAddon.fit();
+                   socket.emit('resize', { cols: term.cols, rows: term.rows });
+               }
+          });
+      }
     </script>
   </body>
 </html>
