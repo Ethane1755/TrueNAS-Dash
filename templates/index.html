@@ -4,11 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TrueNAS Dashboard</title>
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon.png') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Xterm.js & Socket.IO -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
@@ -26,24 +24,18 @@
       }
 
       .liquid-glass {
-          /* Distortion Filter from User Request */
           backdrop-filter: blur(4px) url(#liquid_glass_filter);
           -webkit-backdrop-filter: blur(4px) url(#liquid_glass_filter);
-          
-          /* Glassy Shadows & Highlights (Adjusted for Dark Mode) */
           box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.2),
             inset 0 -1px 0 rgba(0,0,0,0.3),
             inset 6px 6px 16px rgba(255,255,255,0.05),
             0 10px 28px rgba(0,0,0,0.5);
-          
-          /* Semi-transparent Background */
           background: rgba(30, 41, 59, 0.4);
       }
     </style>
   </head>
   <body class="bg-slate-950 text-slate-100 h-screen flex overflow-hidden">
-    <!-- SVG Filter for Liquid Effect -->
     <svg width="0" height="0" style="position:absolute;left:-9999px;top:-9999px">
       <defs>
         <filter id="liquid_glass_filter">
@@ -54,197 +46,171 @@
       </defs>
     </svg>
 
-    <!-- Background Decoration -->
     <div id="bg-ip-decoration" class="fixed top-[-1rem] right-[-1rem] font-black text-slate-700 select-none pointer-events-none z-0 text-[10rem] whitespace-nowrap opacity-40 blur-[3px] leading-none">
-       <!-- IP injected here -->
     </div>
 
-    <!-- Left Sidebar: App Icons -->
-    <aside class="w-20 liquid-glass flex flex-col items-center py-6 gap-4 overflow-y-auto hidden-scrollbar z-10 relative">
-      <div class="mb-4 shrink-0">
+    <aside class="w-16 lg:w-20 liquid-glass flex flex-col items-center py-4 lg:py-6 gap-2 lg:gap-4 overflow-y-auto hidden-scrollbar z-10 relative shrink-0">
+      <div class="mb-2 lg:mb-4 shrink-0">
         <a href="/" class="text-cyan-400 hover:text-cyan-300 transition" title="Dashboard">
-          <i class="fa-solid fa-server text-3xl drop-shadow-lg"></i>
+          <i class="fa-solid fa-server text-2xl lg:text-3xl drop-shadow-lg"></i>
         </a>
       </div>
       
       {% for group in apps %}
-      <!-- Group Container -->
-      <div class="flex flex-col items-center gap-2 w-full px-2 relative" id="group-{{ loop.index }}">
-         <!-- Folder Button -->
+      <div class="flex flex-col items-center gap-2 w-full px-1 lg:px-2 relative" id="group-{{ loop.index }}">
          <button onclick="toggleGroup('list-{{ loop.index }}', this)" 
-                 class="w-12 h-12 bg-slate-800/60 rounded-xl flex items-center justify-center hover:bg-slate-700 hover:scale-105 transition-all duration-300 cursor-pointer text-slate-400 hover:text-white group border border-transparent hover:border-slate-500/50 relative shrink-0 z-20 folder-btn">
-             <i class="fa-solid {{ group.icon }} text-xl {{ group.color }} transition-colors"></i>
+                 class="w-10 h-10 lg:w-12 lg:h-12 bg-slate-800/60 rounded-xl flex items-center justify-center hover:bg-slate-700 hover:scale-105 transition-all duration-300 cursor-pointer text-slate-400 hover:text-white group border border-transparent hover:border-slate-500/50 relative shrink-0 z-20 folder-btn">
+             <i class="fa-solid {{ group.icon }} text-lg lg:text-xl {{ group.color }} transition-colors"></i>
          </button>
 
-         <!-- Expandable List -->
-         <div id="list-{{ loop.index }}" class="flex flex-col gap-3 items-center w-full overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0 relative z-10 app-list-container">
+         <div id="list-{{ loop.index }}" class="flex flex-col gap-2 lg:gap-3 items-center w-full overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0 relative z-10 app-list-container">
             {% for app in group.apps %}
             <a href="http://{{ truenas_ip }}:{{ app.port }}" target="_blank" 
                 data-tooltip="{{ app.name }}"
-                class="w-12 h-12 bg-slate-700/40 rounded-xl flex items-center justify-center hover:bg-slate-600 hover:scale-110 transition-all duration-200 cursor-pointer group border border-transparent hover:border-slate-500/30 relative shrink-0">
+                class="w-10 h-10 lg:w-12 lg:h-12 bg-slate-700/40 rounded-xl flex items-center justify-center hover:bg-slate-600 hover:scale-110 transition-all duration-200 cursor-pointer group border border-transparent hover:border-slate-500/30 relative shrink-0">
                 
-                <!-- Icon or Fallback -->
                 <img src="{{ url_for('static', filename='icons/' + app.icon) }}" 
                     alt="{{ app.name }}" 
-                    class="w-10 h-10 object-contain opacity-85 group-hover:opacity-100 transition-all duration-300 filter grayscale group-hover:grayscale-0 pointer-events-none"
+                    class="w-8 h-8 lg:w-10 lg:h-10 object-contain opacity-85 group-hover:opacity-100 transition-all duration-300 filter grayscale group-hover:grayscale-0 pointer-events-none"
                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 
-                <div class="hidden w-full h-full items-center justify-center text-[9px] font-bold text-slate-300 group-hover:text-white leading-tight text-center px-0.5 animate-pulse pointer-events-none">
+                <div class="hidden w-full h-full items-center justify-center text-[8px] lg:text-[9px] font-bold text-slate-300 group-hover:text-white leading-tight text-center px-0.5 animate-pulse pointer-events-none">
                     {{ app.name[:3] }}
                 </div>
             </a>
             {% endfor %}
-            <div class="w-8 h-px bg-white/10 my-1"></div>
+            <div class="w-6 lg:w-8 h-px bg-white/10 my-1"></div>
          </div>
       </div>
       {% endfor %}
       
-      <!-- Spacer for scroll -->
       <div class="h-4 shrink-0"></div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col p-6 gap-6 relative">
+    <main class="flex-1 flex flex-col p-4 lg:p-6 gap-4 lg:gap-6 relative overflow-hidden">
       
-      <!-- Tab Navigation -->
-      <div class="flex gap-4 mb-2 z-20 shrink-0">
-          <button id="tab-dashboard" onclick="switchView('dashboard')" class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 px-4 py-2 rounded-lg font-bold hover:bg-cyan-500/30 transition-all backdrop-blur-md shadow-lg">
+      <div class="flex gap-4 mb-0 z-20 shrink-0">
+          <button id="tab-dashboard" onclick="switchView('dashboard')" class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 px-3 py-1.5 lg:px-4 lg:py-2 text-sm lg:text-base rounded-lg font-bold hover:bg-cyan-500/30 transition-all backdrop-blur-md shadow-lg">
              <i class="fa-solid fa-gauge mr-2"></i>Dashboard
           </button>
-          <button id="tab-terminal" onclick="switchView('terminal')" class="bg-slate-800/40 text-slate-400 border border-slate-700/50 px-4 py-2 rounded-lg font-bold hover:bg-slate-700/50 transition-all backdrop-blur-md hover:text-slate-200">
+          <button id="tab-terminal" onclick="switchView('terminal')" class="bg-slate-800/40 text-slate-400 border border-slate-700/50 px-3 py-1.5 lg:px-4 lg:py-2 text-sm lg:text-base rounded-lg font-bold hover:bg-slate-700/50 transition-all backdrop-blur-md hover:text-slate-200">
              <i class="fa-solid fa-terminal mr-2"></i>Terminal
           </button>
       </div>
 
-      <!-- Dashboard View -->
-      <div id="dashboard-view" class="flex-1 flex gap-6 w-full h-full overflow-hidden">
+      <div id="dashboard-view" class="flex-1 flex gap-4 lg:gap-6 w-full h-full overflow-hidden min-h-0">
       
-      <!-- Middle-Left Column: Storage (Donuts) -->
-      <section class="w-3/12 flex flex-col gap-6 h-full">
-        <!-- Storage Container -->
-        <div class="flex-1 liquid-glass rounded-2xl p-6 flex flex-col justify-around items-center" id="storage-container">
-           <!-- Placeholder (will be populated by JS) -->
-           <div class="text-slate-500 animate-pulse">Loading Storage...</div>
+      <section class="w-2/12 xl:w-3/12 flex flex-col gap-4 lg:gap-6 h-full min-h-0">
+        <div class="flex-1 liquid-glass rounded-2xl p-2 lg:p-6 flex flex-col justify-around items-center min-h-0 overflow-y-auto hidden-scrollbar" id="storage-container">
+           <div class="text-slate-500 animate-pulse text-xs lg:text-base">Loading Storage...</div>
         </div>
       </section>
 
-      <!-- Right Column: Specs & Metrics -->
-      <section class="w-9/12 flex flex-col gap-6 h-full">
+      <section class="w-10/12 xl:w-9/12 flex flex-col gap-4 lg:gap-6 h-full min-h-0">
         
-        <!-- Top Half: Specs & HDD Status -->
-        <div class="h-1/2 flex gap-6">
+        <div class="flex-[4] flex gap-4 lg:gap-6 min-h-0">
           
-          <!-- Specs (Left - Smaller) -->
-          <div class="w-4/12 liquid-glass rounded-2xl p-6 overflow-auto flex flex-col">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-xl font-bold text-slate-200"><i class="fa-solid fa-circle-info mr-2 text-cyan-400"></i>Server Specs</h2>
-              <!-- Removed Uptime from header -->
+          <div class="w-5/12 lg:w-4/12 liquid-glass rounded-2xl p-3 lg:p-6 overflow-auto flex flex-col min-h-0 hidden-scrollbar">
+            <div class="flex items-center justify-between mb-2 lg:mb-4 shrink-0">
+              <h2 class="text-base lg:text-xl font-bold text-slate-200"><i class="fa-solid fa-circle-info mr-2 text-cyan-400"></i>Specs</h2>
             </div>
             
-            <div class="prose prose-invert prose-sm max-w-none flex-1">
-              <!-- Example Editable Content Area -->
-              <div contenteditable="true" class="outline-none focus:ring-1 focus:ring-cyan-500/50 rounded p-2 -m-2">
-                <h3 class="text-lg font-semibold text-slate-300">TrueNAS Scale</h3>
-                <ul class="list-disc pl-4 text-slate-400 space-y-1 mt-2">
+            <div class="prose prose-invert prose-xs lg:prose-sm max-w-none flex-1 overflow-y-auto hidden-scrollbar">
+              <div contenteditable="true" class="outline-none focus:ring-1 focus:ring-cyan-500/50 rounded p-1 lg:p-2 -m-1 lg:-m-2">
+                <h3 class="text-sm lg:text-lg font-semibold text-slate-300 mb-1 lg:mb-2">TrueNAS Scale</h3>
+                <ul class="list-disc pl-4 text-slate-400 space-y-0.5 lg:space-y-1 text-xs lg:text-sm">
                   <li><strong>CPU:</strong> {{ spec_cpu }}</li>
                   <li><strong>RAM:</strong> {{ spec_ram }}</li>
                   <li><strong>Pool 1:</strong> {{ spec_pool1 }}</li>
                   <li><strong>Pool 2:</strong> {{ spec_pool2 }}</li>
+                  <li><strong>GPU:</strong> {{ spec_gpu }}</li>
                 </ul>
               </div>
             </div>
             
-            <!-- Uptime moved to bottom -->
-            <div class="mt-auto pt-4 border-t border-white/10 text-xs text-slate-500 text-right" id="uptime-display">
+            <div class="mt-auto pt-2 lg:pt-4 border-t border-white/10 text-[10px] lg:text-xs text-slate-500 text-right shrink-0" id="uptime-display">
                 Uptime: --
             </div>
           </div>
 
-          <!-- Drive Status (Right - Wider, Split HDD/SSD) -->
-          <div class="w-8/12 liquid-glass rounded-2xl p-6 relative flex flex-col">
-               <div class="flex items-center justify-between mb-4 shrink-0">
-                   <h2 class="text-xl font-bold text-slate-200"><i class="fa-solid fa-temperature-half mr-2 text-rose-400"></i>Drive Status</h2>
+          <div class="w-7/12 lg:w-8/12 liquid-glass rounded-2xl p-3 lg:p-6 relative flex flex-col min-h-0">
+               <div class="flex items-center justify-between mb-2 lg:mb-4 shrink-0">
+                   <h2 class="text-base lg:text-xl font-bold text-slate-200"><i class="fa-solid fa-temperature-half mr-2 text-rose-400"></i>Drives</h2>
                </div>
                
-               <!-- Headers -->
-               <div class="flex gap-4 mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
-                   <div class="w-1/2 pl-2">HDD</div>
-                   <div class="w-1/2 pl-2 border-l border-slate-700/50">SSD / NVMe</div>
+               <div class="flex gap-2 lg:gap-4 mb-2 text-[10px] lg:text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                   <div class="w-1/2 pl-1 lg:pl-2">HDD</div>
+                   <div class="w-1/2 pl-1 lg:pl-2 border-l border-slate-700/50">SSD / NVMe</div>
                </div>
 
-               <!-- Scrollable Content -->
-               <div class="flex-1 overflow-y-auto hidden-scrollbar">
-                   <div class="flex gap-4 min-h-full">
-                       <!-- HDD Column -->
-                       <div class="w-1/2 flex flex-col gap-3" id="hdd-list">
-                           <!-- JS Populated -->
+               <div class="flex-1 overflow-y-auto hidden-scrollbar min-h-0">
+                   <div class="flex gap-2 lg:gap-4 min-h-full">
+                       <div class="w-1/2 flex flex-col gap-2 lg:gap-3" id="hdd-list">
                        </div>
                        
-                       <!-- SSD Column -->
-                       <div class="w-1/2 flex flex-col gap-3 border-l border-slate-700/50 pl-4" id="ssd-list">
-                           <!-- JS Populated -->
+                       <div class="w-1/2 flex flex-col gap-2 lg:gap-3 border-l border-slate-700/50 pl-2 lg:pl-4" id="ssd-list">
                        </div>
                    </div>
                </div>
           </div>
         </div>
 
-        <!-- Bottom Half: Metrics -->
-        <div class="h-1/2 flex gap-6">
+        <div class="flex-[3] flex gap-4 lg:gap-6 min-h-0">
 
-          <!-- Bottom-Left: Network Charts (Swapped) -->
-          <div class="w-2/3 flex flex-col gap-3">
-             <div class="flex-1 liquid-glass rounded-2xl p-2 relative">
+          <div class="w-2/3 flex flex-col gap-2 lg:gap-3 min-h-0">
+             <div class="flex-1 liquid-glass rounded-2xl p-1 lg:p-2 relative min-h-0">
                <canvas id="net1Chart"></canvas>
-               <div class="absolute top-2 left-3 text-[10px] bg-slate-900/80 px-1.5 rounded text-slate-400 font-mono" id="net1-label">NIC 1</div>
+               <div class="absolute top-2 left-3 text-[9px] lg:text-[10px] bg-slate-900/80 px-1.5 rounded text-slate-400 font-mono" id="net1-label">NIC 1</div>
              </div>
-             <div class="flex-1 liquid-glass rounded-2xl p-2 relative">
+             <div class="flex-1 liquid-glass rounded-2xl p-1 lg:p-2 relative min-h-0">
                <canvas id="net2Chart"></canvas>
-               <div class="absolute top-2 left-3 text-[10px] bg-slate-900/80 px-1.5 rounded text-slate-400 font-mono" id="net2-label">NIC 2</div>
+               <div class="absolute top-2 left-3 text-[9px] lg:text-[10px] bg-slate-900/80 px-1.5 rounded text-slate-400 font-mono" id="net2-label">NIC 2</div>
              </div>
           </div>
           
-          <!-- Bottom-Left: CPU/RAM Bars -->
-          <div class="w-1/3 liquid-glass rounded-2xl p-4 flex justify-center gap-12 items-end">
-             <!-- CPU Bar Group -->
-             <div class="flex flex-col items-center gap-2 h-full justify-end w-12">
-               <div class="text-xs font-bold text-slate-300 mb-1" id="cpu-text">0%</div>
-               <div class="w-full bg-slate-700/50 rounded-lg relative flex-1 overflow-hidden group">
+          <div class="w-1/3 liquid-glass rounded-2xl p-2 lg:p-4 flex justify-center gap-2 lg:gap-12 items-end min-h-0">
+             <div class="flex flex-col items-center gap-1 lg:gap-2 h-full justify-end w-8 lg:w-12">
+               <div class="text-[10px] lg:text-xs font-bold text-slate-300 mb-0.5 lg:mb-1" id="cpu-text">0%</div>
+               <div class="w-full bg-slate-700/50 rounded-lg relative flex-1 overflow-hidden group min-h-0">
                  <div id="cpu-bar" class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-600 to-cyan-400 transition-all duration-700 rounded-lg" style="height: 0%"></div>
-                 <!-- CPU Temp Overlay -->
-                 <div class="absolute bottom-2 w-full text-center">
-                    <span id="cpu-temp" class="text-[9px] font-bold text-white drop-shadow-md">--°C</span>
+                 <div class="absolute bottom-1 lg:bottom-2 w-full text-center">
+                    <span id="cpu-temp" class="text-[8px] lg:text-[9px] font-bold text-white drop-shadow-md">--°C</span>
                  </div>
                </div>
-               <div class="mt-2 text-xs text-slate-400 font-medium">CPU</div>
+               <div class="mt-1 lg:mt-2 text-[10px] lg:text-xs text-slate-400 font-medium">CPU</div>
              </div>
 
-             <!-- RAM Bar Group -->
-             <div class="flex flex-col items-center gap-2 h-full justify-end w-20">
-               <div class="text-xs font-bold text-slate-300 mb-1" id="ram-text">0%</div>
-               <div class="w-12 bg-slate-700/50 rounded-lg relative flex-1 overflow-hidden flex flex-col-reverse group">
-                 <!-- Stacked Bars: Bottom is Apps, Top is Cache -->
-                 <!-- User requested specific two-color gradient style like CPU. -->
-                 <!-- Since stacked, we use variants of the same theme or distinct gradients that look unified. -->
-                 <!-- Labels text should be always visible (no opacity-0) -->
+             <div class="flex flex-col items-center gap-1 lg:gap-2 h-full justify-end w-12 lg:w-20">
+               <div class="text-[10px] lg:text-xs font-bold text-slate-300 mb-0.5 lg:mb-1" id="ram-text">0%</div>
+               <div class="w-8 lg:w-12 bg-slate-700/50 rounded-lg relative flex-1 overflow-hidden flex flex-col-reverse group min-h-0">
                  <div id="ram-bar-apps" class="w-full bg-gradient-to-t from-purple-800 to-purple-500 transition-all duration-700 rounded-b-lg relative" style="height: 0%">
-                    <span class="absolute bottom-1 w-full text-center text-[9px] text-white drop-shadow-md font-bold">App</span>
+                    <span class="absolute bottom-0.5 lg:bottom-1 w-full text-center text-[8px] lg:text-[9px] text-white drop-shadow-md font-bold">App</span>
                  </div>
                  <div id="ram-bar-cache" class="w-full bg-gradient-to-t from-cyan-600 to-cyan-400 transition-all duration-700 rounded-t-lg backdrop-blur-sm relative" style="height: 0%">
-                    <span class="absolute bottom-1 w-full text-center text-[9px] text-white drop-shadow-md font-bold">ZFS</span>
+                    <span class="absolute bottom-0.5 lg:bottom-1 w-full text-center text-[8px] lg:text-[9px] text-white drop-shadow-md font-bold">ZFS</span>
                  </div>
                </div>
-               <div class="mt-2 text-xs text-slate-400 font-medium">RAM</div>
+               <div class="mt-1 lg:mt-2 text-[10px] lg:text-xs text-slate-400 font-medium">RAM</div>
+             </div>
+
+             <!-- GPU Section -->
+             <div class="flex flex-col items-center gap-1 lg:gap-2 h-full justify-end w-8 lg:w-12">
+               <div class="text-[10px] lg:text-xs font-bold text-slate-300 mb-0.5 lg:mb-1" id="gpu-text">0%</div>
+               <div class="w-full bg-slate-700/50 rounded-lg relative flex-1 overflow-hidden group min-h-0">
+                 <div id="gpu-bar" class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-emerald-600 to-green-400 transition-all duration-700 rounded-lg" style="height: 0%"></div>
+                 <div class="absolute bottom-1 lg:bottom-2 w-full text-center">
+                    <span id="gpu-temp" class="text-[8px] lg:text-[9px] font-bold text-white drop-shadow-md">--°C</span>
+                 </div>
+               </div>
+               <div class="mt-1 lg:mt-2 text-[10px] lg:text-xs text-slate-400 font-medium">GPU</div>
              </div>
           </div>
 
         </div>
       </section>
-      </div> <!-- End Dashboard View -->
+      </div>
 
-      <!-- Terminal View -->
       <div id="terminal-view" class="hidden flex-1 w-full h-full liquid-glass rounded-2xl p-4 relative overflow-hidden flex flex-col">
-         <!-- Terminal Container -->
          <div id="terminal-container" class="w-full h-full rounded-xl bg-black/80 backdrop-blur-none border border-white/5 p-2 overflow-hidden"></div>
       </div>
 
@@ -253,10 +219,37 @@
     <script>
       // -- DOM Elements --
       const uptimeDisplay = document.getElementById("uptime-display");
+
+      // --- iPad 專用除錯錯誤提示 ---
+      function showDebugError(source, err) {
+          console.error(`[${source} Error]`, err);
+          let errDiv = document.getElementById('debug-error-toast');
+          
+          // 如果還沒有建立這個除錯框，就動態產生一個
+          if (!errDiv) {
+              errDiv = document.createElement('div');
+              errDiv.id = 'debug-error-toast';
+              errDiv.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-rose-900/95 text-white px-4 py-3 rounded-lg shadow-2xl border border-rose-500 z-[9999] text-xs font-mono max-w-[90vw] break-words backdrop-blur-md';
+              document.body.appendChild(errDiv);
+          }
+          
+          // 將錯誤訊息印在畫面上
+          errDiv.innerHTML = `<div class="font-bold text-rose-300 mb-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>${source} 錯誤</div><div>${err.name}: ${err.message || err}</div>`;
+          errDiv.style.display = 'block';
+          
+          // 錯誤訊息顯示 8 秒後自動隱藏，避免擋住畫面
+          setTimeout(() => { errDiv.style.display = 'none'; }, 8000);
+      }
+      // -----------------------------
+
       const storageContainer = document.getElementById("storage-container");
       
       const cpuBar = document.getElementById("cpu-bar");
       const cpuText = document.getElementById("cpu-text");
+
+      const gpuBar = document.getElementById("gpu-bar");
+      const gpuText = document.getElementById("gpu-text");
+      const gpuTempEl = document.getElementById("gpu-temp");
       
       // Split RAM Bars
       const ramBarApps = document.getElementById("ram-bar-apps");
@@ -352,23 +345,19 @@
       document.addEventListener('mouseout', (e) => {
           const target = e.target.closest('[data-tooltip]');
           if (target) {
-             // We verify if we are moving to child element?
-             // Mouseout fires when entering child.
-             // relatedTarget tells us where we went.
              if (!target.contains(e.relatedTarget)) {
                  hideTooltip();
              }
           }
       });
       
-      // -- Helpers --
       function formatBits(value) {
         if (value === null || value === undefined || Number.isNaN(value)) value = 0;
-        value = value * 8; // Convert Bytes to Bits
-        const units = ["b", "kb", "Mb", "Gb", "Tb"]; // Lowercase 'b' for bits
+        value = value * 8;
+        const units = ["b", "kb", "Mb", "Gb", "Tb"];
         let size = Number(value);
         let unitIndex = 0;
-        while (size >= 1000 && unitIndex < units.length - 1) { // 1000 for network decimals usually, keeping 1024 for data is ok but bits usually base 10
+        while (size >= 1000 && unitIndex < units.length - 1) {
             size /= 1000;
             unitIndex += 1;
         }
@@ -397,7 +386,6 @@
         return `${formatBits(value)}/s`;
       }
 
-      // -- Charts --
       const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -405,10 +393,10 @@
         scales: {
             x: { display: false },
             y: { 
-                display: true, // Show Y axis
+                display: true,
                 beginAtZero: true,
                 ticks: {
-                    color: '#64748b', // slate-500
+                    color: '#64748b',
                     font: { size: 9 },
                     callback: function(value) { return formatBits(value) + '/s'; }
                 },
@@ -427,7 +415,6 @@
         }
       };
 
-      // Initialize Network Charts
       const net1ctx = document.getElementById('net1Chart').getContext('2d');
       const net2ctx = document.getElementById('net2Chart').getContext('2d');
 
@@ -436,21 +423,20 @@
           data: {
               labels: Array(30).fill(''),
               datasets: [
-                  { label: 'In', data: Array(30).fill(0), borderColor: color1, borderWidth: 1.5, fill: false }, // Rx
-                  { label: 'Out', data: Array(30).fill(0), borderColor: color2, borderWidth: 1.5, fill: false } // Tx
+                  { label: 'In', data: Array(30).fill(0), borderColor: color1, borderWidth: 1.5, fill: false },
+                  { label: 'Out', data: Array(30).fill(0), borderColor: color2, borderWidth: 1.5, fill: false }
               ]
           },
           options: chartOptions
       });
 
-      const chart1 = createNetChart(net1ctx, '#34d399', '#38bdf8'); // Green In, Blue Out
+      const chart1 = createNetChart(net1ctx, '#34d399', '#38bdf8');
       const chart2 = createNetChart(net2ctx, '#34d399', '#38bdf8');
 
-      // -- Render Logic --
 
       function getDiskIcon(diskType) {
           if (diskType === 'NVMe') return 'fa-memory';
-          if (diskType === 'SSD') return 'fa-hard-drive'; // Same icon, maybe style differs?
+          if (diskType === 'SSD') return 'fa-hard-drive';
           return 'fa-hard-drive';
       }
 
@@ -474,10 +460,8 @@
               const sizeStr = formatFromGiB(disk.size / (1024**3));
               const typeLabel = disk.type;
               
-              // Sort into columns
               const targetList = (disk.type === 'HDD') ? hddList : ssdList;
 
-              // Temp Color Logic
               let tempClass = "text-emerald-400";
               if (temp > 40) tempClass = "text-yellow-400";
               if (temp > 50) tempClass = "text-rose-400";
@@ -485,28 +469,74 @@
               const tempDisplay = (temp !== null && temp !== undefined) ? `${temp}°C` : "--";
 
               const div = document.createElement("div");
-              div.className = "bg-slate-800/40 p-2 rounded-lg flex items-center justify-between group hover:bg-slate-700/40 transition border border-white/5 box-shadow-inner backdrop-blur-sm";
+              div.className = "bg-slate-800/40 p-2 rounded-lg flex items-center justify-between group hover:bg-slate-700/40 transition border border-white/5 backdrop-blur-sm cursor-pointer hover:border-cyan-500/30";
+              div.title = "Click for SMART details";
+              div.onclick = () => openDiskSmartModal(disk.name);
               div.innerHTML = `
                   <div class="flex items-center gap-2 overflow-hidden">
-                       <div class="w-8 h-8 rounded-full bg-slate-700/50 flex items-center justify-center shrink-0">
-                          <i class="fa-solid ${getDiskIcon(disk.type)} text-slate-400 text-xs"></i>
+                       <div class="w-8 h-8 rounded-full bg-slate-700/50 flex items-center justify-center shrink-0 group-hover:bg-cyan-900/40 transition">
+                          <i class="fa-solid ${getDiskIcon(disk.type)} text-slate-400 text-xs group-hover:text-cyan-400 transition"></i>
                        </div>
                        <div class="min-w-0">
-                           <div class="text-xs font-bold text-slate-200 truncate">${disk.name}</div>
+                           <div class="text-xs font-bold text-slate-200 truncate group-hover:text-cyan-300 transition">${disk.name}</div>
                            <div class="text-[9px] text-slate-500 truncate" title="${disk.model}">${disk.model}</div>
                        </div>
                   </div>
                   <div class="text-right whitespace-nowrap shrink-0 pl-1">
-                      <div class="text-xs font-bold ${tempClass}">${tempDisplay}</div>
+                      <div class="text-xs font-bold ${tempClass}" data-disk-temp="${disk.name}">${tempDisplay}</div>
                       <div class="text-[9px] text-slate-500">${sizeStr}</div>
                   </div>
               `;
               targetList.appendChild(div);
           });
           
-          // Empty states
           if (hddList.childElementCount === 0) hddList.innerHTML = '<div class="text-slate-600 text-[10px] italic p-2 text-center">No HDDs found</div>';
           if (ssdList.childElementCount === 0) ssdList.innerHTML = '<div class="text-slate-600 text-[10px] italic p-2 text-center">No SSDs found</div>';
+
+          // For disks with no temperature (e.g. USB-SATA bridge), try smartctl via SSH
+          // First, re-apply any values we already have in the cache (avoids flicker on re-render)
+          Object.entries(_sshTempCache).forEach(([name, entry]) => applyDiskTemp(name, entry.temp));
+          // Fetch for: disks not yet in cache, OR cache entries older than TTL
+          const now = Date.now();
+          const missingTemps = disks.filter(d =>
+              (d.temp === null || d.temp === undefined) &&
+              (!_sshTempCache[d.name] || now - _sshTempCache[d.name].ts > SSH_TEMP_TTL_MS)
+          );
+          if (missingTemps.length > 0) fetchMissingTemps(missingTemps);
+      }
+
+      // Cache of SSH-fetched temps for disks that TrueNAS API can't read (e.g. USB-SATA bridge)
+      // Structure: { diskName: { temp: number, ts: timestamp } }
+      const _sshTempCache = {};
+      const SSH_TEMP_TTL_MS = 60_000; // refresh every 60s
+
+      async function fetchMissingTemps(disks) {
+          const creds = getSshCreds();
+          if (!creds.pass) return; // No creds available — skip
+          await Promise.all(disks.map(async disk => {
+              try {
+                  const resp = await fetch(`/api/smart/${disk.name}`, {
+                      headers: { 'X-SSH-User': creds.user, 'X-SSH-Pass': creds.pass }
+                  });
+                  if (!resp.ok) return;
+                  const d = await resp.json();
+                  const t = d.temp ?? d.temp_c ?? null;
+                  if (t === null || t === undefined) return;
+                  // Persist in cache so re-renders don't wipe the value
+                  _sshTempCache[disk.name] = { temp: t, ts: Date.now() };
+                  applyDiskTemp(disk.name, t);
+              } catch(e) { /* silently ignore */ }
+          }));
+      }
+
+      function applyDiskTemp(diskName, t) {
+          document.querySelectorAll(`[data-disk-temp="${diskName}"]`).forEach(el => {
+              let cls = 'text-emerald-400';
+              if (t > 40) cls = 'text-yellow-400';
+              if (t > 50) cls = 'text-rose-400';
+              el.className = `text-xs font-bold ${cls}`;
+              el.textContent = `${t}°C`;
+          });
       }
 
       function updateBar(barEl, textEl, percentage) {
@@ -514,16 +544,23 @@
           barEl.style.height = `${val}%`;
           if (textEl) textEl.textContent = `${Math.round(val)}%`;
           
-          // Color shift based on load (Only if it has standard gradient logic)
-          // Since we moved to stacked bars for RAM, this applies mostly to CPU now
-          if (barEl.id === 'cpu-bar') {
-                barEl.classList.remove('from-blue-600', 'to-cyan-400', 'from-amber-600', 'to-yellow-400', 'from-rose-600', 'to-red-400');
+          if (barEl.id === 'cpu-bar' || barEl.id === 'gpu-bar') {
+                if(barEl.id === 'cpu-bar') {
+                    barEl.classList.remove('from-blue-600', 'to-cyan-400', 'from-amber-600', 'to-yellow-400', 'from-rose-600', 'to-red-400');
+                } else {
+                    barEl.classList.remove('from-emerald-600', 'to-green-400', 'from-amber-600', 'to-yellow-400', 'from-rose-600', 'to-red-400');
+                }
+
                 if (val > 80) {
                     barEl.classList.add('from-rose-600', 'to-red-400');
                 } else if (val > 60) {
                     barEl.classList.add('from-amber-600', 'to-yellow-400');
                 } else {
-                    barEl.classList.add('from-blue-600', 'to-cyan-400');
+                    if (barEl.id === 'cpu-bar') {
+                        barEl.classList.add('from-blue-600', 'to-cyan-400');
+                    } else {
+                        barEl.classList.add('from-emerald-600', 'to-green-400');
+                    }
                 }
           }
       }
@@ -543,7 +580,7 @@
         storageContainer.innerHTML = "";
         
         if (!disks || disks.length === 0) {
-            storageContainer.innerHTML = '<div class="text-slate-500">No Storage Data</div>';
+            storageContainer.innerHTML = '<div class="text-slate-500 text-sm">No Storage Data</div>';
             return;
         }
 
@@ -555,22 +592,20 @@
           if (percentVal > 75) colorHex = "#f59e0b";
           if (percentVal > 90) colorHex = "#f43f5e";
           
-          const chartConic = `background: conic-gradient(${colorHex} ${percentVal}%, #1e293b 0);`; // #1e293b is slate-800
+          const chartConic = `background: conic-gradient(${colorHex} ${percentVal}%, #1e293b 0);`;
 
           const div = document.createElement("div");
-          div.className = "flex flex-col items-center justify-center flex-1 w-full";
-          // Large responsive donut
-          // h-[240px] w-[240px] fixed or responsive? Let's use relative sizing valid safely within container
+          div.className = "flex flex-col items-center justify-center flex-1 w-full min-w-0";
           div.innerHTML = `
-             <div class="relative h-[25vh] aspect-square rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105" style="${chartConic}">
+             <div class="relative w-full aspect-square max-w-[190px] 2xl:max-w-[220px] rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 mx-auto" style="${chartConic}">
                 <div class="absolute inset-[15%] bg-slate-950 rounded-full flex flex-col items-center justify-center pt-2">
-                   <div class="text-3xl lg:text-4xl font-bold text-slate-100 tracking-tighter">${percentage}%</div>
-                   <div class="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-1">Online</div>
+                   <div class="text-2xl lg:text-3xl 2xl:text-4xl font-bold text-slate-100 tracking-tighter">${percentage}%</div>
+                   <div class="text-[10px] lg:text-xs text-emerald-400 font-bold uppercase tracking-widest mt-1">Online</div>
                 </div>
              </div>
-             <div class="mt-4 text-center">
-                 <h3 class="text-xl font-medium text-slate-200">${disk.label.split(' ')[0]}</h3>
-                 <p class="text-sm text-slate-400 font-mono mt-1">${formatFromGiB(disk.used)} / ${formatFromGiB(disk.total)}</p>
+             <div class="mt-2 lg:mt-4 text-center w-full">
+                 <h3 class="text-base lg:text-xl font-medium text-slate-200 truncate w-full px-2" title="${disk.label}">${disk.label.split(' ')[0]}</h3>
+                 <p class="text-[10px] lg:text-xs text-slate-400 font-mono mt-0.5">${formatFromGiB(disk.used)} / ${formatFromGiB(disk.total)}</p>
              </div>
           `;
           storageContainer.appendChild(div);
@@ -578,10 +613,8 @@
       }
 
       function updateChartData(chart, rx, tx) {
-          // Push new data
           chart.data.datasets[0].data.push(rx);
           chart.data.datasets[1].data.push(tx);
-          // Remove old
           if (chart.data.datasets[0].data.length > 30) {
               chart.data.datasets[0].data.shift();
               chart.data.datasets[1].data.shift();
@@ -589,23 +622,68 @@
           chart.update();
       }
 
-      // -- Fetchers --
+      // -- Tablet/Mobile Optimization & Debug --
+      
+      // Force non-blocking rendering
+      requestAnimationFrame(() => {
+          document.body.style.display = 'flex';
+      });
+      
+      let isFetchingMetrics = false;
+      let isFetchingStats = false;
+
+      // Polyfill for older devices/browsers
+      if (!window.fetch) {
+          alert("Your browser does not support Fetch API. Please update.");
+      }
 
       async function fetchMetrics() {
+        if (isFetchingMetrics) return;
+        isFetchingMetrics = true;
+        
         try {
-          const response = await fetch("/api/metrics");
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          
+          // Add explicit keep-alive and mode
+          const response = await fetch("/api/metrics?t=" + Date.now(), {
+              signal: controller.signal,
+              cache: "no-store",
+              headers: { 
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache'
+              },
+              keepalive: true
+          });
+          clearTimeout(timeoutId);
+
+          if (!response.ok) throw new Error("HTTP " + response.status);
           const data = await response.json();
           
-          // Update Background IP if not set or changed
-          if (data.system_ip && bgIpDecoration) {
-             bgIpDecoration.textContent = data.system_ip.split(":")[0]; // Just IP no port if any
+          // Clear loading state if present
+          const loadingEl = document.querySelector("#storage-container .animate-pulse");
+          if (loadingEl && loadingEl.textContent.includes("Loading")) {
+             storageContainer.innerHTML = "";
           }
 
-          // Storage
+          
+          if (data.system_ip && bgIpDecoration) {
+             bgIpDecoration.textContent = data.system_ip.split(":")[0];
+          }
+
           renderStorage(data.disks);
 
-          // CPU / RAM Bars
           updateBar(cpuBar, cpuText, data.cpu_usage);
+          
+          if (data.gpu) {
+              if (gpuBar) updateBar(gpuBar, gpuText, data.gpu.utilization);
+              if (gpuTempEl) {
+                  gpuTempEl.textContent = `${Math.round(data.gpu.temperature)}°C`;
+              }
+          } else {
+             if (gpuBar) updateBar(gpuBar, gpuText, 0);
+             if (gpuTempEl) gpuTempEl.textContent = '--°C';
+          }
           
           const cpuTempEl = document.getElementById('cpu-temp');
           if (cpuTempEl) {
@@ -616,16 +694,13 @@
           if (data.memory) {
              updateRamStacked(data.memory.apps_percent, data.memory.cache_percent, ramText);
           } else {
-             // Fallback
              updateRamStacked(0, 0, ramText);
           }
 
-          // Network Charts
           if (data.nets && data.nets.length >= 2) {
              const net1 = data.nets[0];
              const net2 = data.nets[1];
              
-             // Update Labels
              net1Label.innerText = `${net1.label} (Rx: ${formatRate(net1.rx)})`;
              net2Label.innerText = `${net2.label} (Rx: ${formatRate(net2.rx)})`;
 
@@ -638,17 +713,42 @@
           }
 
         } catch (error) {
-           console.error("Metric fetch fail", error);
+           showDebugError("API Metrics", error);
+        } finally {
+            isFetchingMetrics = false;
         }
       }
 
       async function fetchStats() {
+          if (isFetchingStats) return;
+          isFetchingStats = true;
           try {
-            const response = await fetch("/api/stats");
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            // Add explicit keep-alive and mode
+            const response = await fetch("/api/stats?t=" + Date.now(), {
+              signal: controller.signal,
+              cache: "no-store",
+              headers: { 
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache'
+              },
+              keepalive: true
+            });
+            clearTimeout(timeoutId);
+
+             if (!response.ok) throw new Error("HTTP " + response.status);
             const data = await response.json();
             
+            // Clear loading state if present
+            const loadingEl = document.querySelector("#storage-container .animate-pulse");
+            if (loadingEl && loadingEl.textContent.includes("Loading")) {
+               storageContainer.innerHTML = "";
+            }
+
+            
             if(data.uptime) {
-                // Convert seconds to readable string roughly
                 const uptime = data.uptime; 
                 if (typeof uptime === 'number') {
                     const days = Math.floor(uptime / 86400);
@@ -659,22 +759,52 @@
                 }
             }
 
-            // Render Disks
             if (data.disks) {
                 renderDisks(data.disks);
             }
 
-          } catch(e) { console.error(e); }
+          } catch(e) { 
+              showDebugError("API Stats", e);
+          }
+          finally {
+              isFetchingStats = false;
+          }
       }
 
-      // Initial Calls
-      fetchStats();
-      fetchMetrics();
-      
-      setInterval(fetchStats, 10000);
-      setInterval(fetchMetrics, 2000); // Faster visual refresh for charts
+      // Main Execution Loop
+      document.addEventListener('DOMContentLoaded', () => {
+          console.log("DOM loaded");
 
-      // --- Tab & Terminal Logic ---
+          // Prompt SSH credentials on first load so temperature fallback & SMART work immediately
+          if (!getSshCreds().pass) {
+              requireSshCreds(() => {
+                  // Creds stored — kick off initial data fetch so temps are loaded with creds
+                  fetchStats();
+                  fetchMetrics();
+              });
+          } else {
+              fetchStats(); // Initial fetch
+              fetchMetrics();
+          }
+          
+          setInterval(() => {
+             console.log("Tick: stats");
+             fetchStats();
+          }, 10000);
+          
+          setInterval(() => {
+             console.log("Tick: metrics");
+             fetchMetrics();
+          }, 4000);
+      });
+      
+      // Fallback if DOMContentLoaded already fired
+      if (document.readyState === "complete" || document.readyState === "interactive") {
+           setTimeout(fetchMetrics, 100);
+           setTimeout(fetchStats, 200);
+      }
+
+
       let term = null;
       let socket = null;
       let fitAddon = null;
@@ -692,7 +822,6 @@
               updateTabStyle(tabDash, true);
               updateTabStyle(tabTerm, false);
               
-              // 離開 Terminal 時，斷開連線並銷毀實例
               if (socket) {
                   socket.disconnect();
                   socket = null;
@@ -710,9 +839,7 @@
               updateTabStyle(tabDash, false);
               updateTabStyle(tabTerm, true);
               
-              // 進入 Terminal 時，總是建立新的連線
               if (!term) {
-                  // 稍微延遲以確保 DOM 可見
                   setTimeout(initTerminal, 50);
               }
           }
@@ -731,7 +858,6 @@
       function initTerminal() {
           const container = document.getElementById('terminal-container');
           
-          // Clear container just in case
           container.innerHTML = '';
 
           term = new Terminal({
@@ -739,7 +865,7 @@
               fontSize: 14,
               fontFamily: '"MesloLGS NF", Menlo, Monaco, "Courier New", monospace',
               theme: {
-                  background: '#00000000', // Transparent for glass effect (handled by container)
+                  background: '#00000000',
                   foreground: '#e2e8f0',
                   cursor: '#06b6d4'
               },
@@ -768,7 +894,6 @@
               socket.emit('input', data);
           });
 
-          // Resize handler
           window.addEventListener('resize', () => {
                if(term && !document.getElementById('terminal-view').classList.contains('hidden')) {
                    fitAddon.fit();
@@ -776,7 +901,380 @@
                }
           });
       }
+
+      // ---- Per-disk SMART Detail Modal ----
+      function openDiskSmartModal(diskName) {
+          requireSshCreds(creds => _doOpenSmartModal(diskName, creds));
+      }
+
+      async function _doOpenSmartModal(diskName, creds) {
+          const modal = document.getElementById('smart-modal');
+          const body  = document.getElementById('smart-modal-body');
+          const title = document.getElementById('smart-modal-title');
+          title.innerHTML = `<i class="fa-solid fa-shield-heart mr-2 text-cyan-400"></i>SMART – <span class="font-mono text-cyan-300">${diskName}</span>`;
+          body.className = 'flex-1 overflow-y-auto hidden-scrollbar p-4 flex flex-col gap-3';
+          body.innerHTML = `<div class="flex items-center gap-3 text-slate-400 py-8 justify-center"><i class="fa-solid fa-spinner animate-spin text-cyan-400 text-xl"></i><span>讀取 SMART 資料中…</span></div>`;
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+
+          try {
+              const res = await fetch(`/api/smart/${encodeURIComponent(diskName)}`, {
+                  headers: {
+                      'X-SSH-User': creds.user,
+                      'X-SSH-Pass': creds.pass
+                  }
+              });
+              if (res.status === 401) {
+                  clearSshCreds();
+                  closeSmartModal();
+                  body.innerHTML = '';
+                  openDiskSmartModal(diskName);  // 重新要求輸入
+                  return;
+              }
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const d = await res.json();
+              // 若後端回報認證失敗，清除並重試
+              if (d.auth_failed) {
+                  clearSshCreds();
+                  closeSmartModal();
+                  body.innerHTML = '';
+                  openDiskSmartModal(diskName);
+                  return;
+              }
+              if (d.error) throw new Error(d.error);
+
+              // --- raw text fallback ---
+              if (d.raw_text) {
+                  body.innerHTML = `<pre class="text-[10px] text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">${escHtml(d.raw_text)}</pre>`;
+                  return;
+              }
+
+              // --- health badge ---
+              const healthBadge = d.health_passed === true
+                  ? `<span class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-900/50 border border-emerald-600/50 text-emerald-300 font-bold text-sm"><i class="fa-solid fa-circle-check"></i>PASSED</span>`
+                  : d.health_passed === false
+                  ? `<span class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-900/50 border border-rose-600/50 text-rose-300 font-bold text-sm"><i class="fa-solid fa-circle-xmark"></i>FAILED</span>`
+                  : `<span class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/60 border border-slate-600/50 text-slate-400 font-bold text-sm"><i class="fa-solid fa-circle-question"></i>Unknown</span>`;
+
+              const tempColor = (t) => {
+                  if (t == null) return 'text-slate-500';
+                  if (t >= 55) return 'text-rose-400';
+                  if (t >= 45) return 'text-amber-400';
+                  return 'text-emerald-400';
+              };
+
+              // --- info grid ---
+              const infoItems = [
+                  ['Model',       d.model       || '—'],
+                  ['Serial',      d.serial      || '—'],
+                  ['Firmware',    d.firmware    || '—'],
+                  ['Capacity',    d.capacity    || '—'],
+                  ['Form Factor', d.form_factor || '—'],
+                  ['Media Type',  d.media_type  || '—'],
+                  ['Interface',   d.interface   || '—'],
+                  ['Temperature', d.temp != null ? `${d.temp}°C` : '—'],
+                  ['Power-On',    d.power_on_h  != null ? `${d.power_on_h.toLocaleString()} hrs` : '—'],
+                  ['Power Cycles',d.power_cycles!= null ? d.power_cycles.toString() : '—'],
+                  ['Errors Logged', d.error_count != null ? (d.error_count === 0 ? '<span class="text-emerald-400">0 ✓</span>' : `<span class="text-rose-400">${d.error_count}</span>`) : '—'],
+              ];
+
+              const infoGrid = `<div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  ${infoItems.map(([k,v]) => `
+                  <div class="flex items-baseline gap-1 col-span-1">
+                      <span class="text-[10px] text-slate-500 whitespace-nowrap shrink-0">${k}:</span>
+                      <span class="text-[11px] text-slate-200 font-mono truncate">${v}</span>
+                  </div>`).join('')}
+              </div>`;
+
+              // --- SMART attributes table ---
+              let attrsHtml = '';
+              if (d.attrs && d.attrs.length > 0) {
+                  const warnIds = new Set([5, 187, 197]);
+                  const critIds = new Set([5, 187, 197]);
+                  const rows = d.attrs.map(a => {
+                      const failed = a.failed && a.failed !== '-' && a.failed !== '';
+                      const rawWarn = critIds.has(a.id) && a.raw > 0;
+                      const rowCls = failed || rawWarn ? 'bg-rose-900/20' : '';
+                      const rawCls = rawWarn ? 'text-rose-400 font-bold' : 'text-slate-200';
+                      return `<tr class="${rowCls}">
+                          <td class="py-0.5 pr-2 text-slate-500 font-mono text-[10px]">${a.id}</td>
+                          <td class="py-0.5 pr-3 text-slate-300 text-[10px]">${a.name}</td>
+                          <td class="py-0.5 pr-2 text-center text-[10px] text-slate-400">${a.value ?? '—'}</td>
+                          <td class="py-0.5 pr-2 text-center text-[10px] text-slate-500">${a.worst ?? '—'}</td>
+                          <td class="py-0.5 pr-2 text-center text-[10px] text-slate-500">${a.thresh ?? '—'}</td>
+                          <td class="py-0.5 text-right font-mono text-[10px] ${rawCls}">${a.raw ?? '—'}</td>
+                      </tr>`;
+                  }).join('');
+                  attrsHtml = `
+                  <div>
+                      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">SMART Attributes</div>
+                      <div class="overflow-x-auto">
+                      <table class="w-full text-left">
+                          <thead><tr class="border-b border-slate-700/50">
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold pr-2">ID</th>
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold pr-3">Attribute</th>
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold text-center pr-2">Val</th>
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold text-center pr-2">Wst</th>
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold text-center pr-2">Thr</th>
+                              <th class="pb-1 text-[9px] text-slate-600 font-semibold text-right">Raw</th>
+                          </tr></thead>
+                          <tbody>${rows}</tbody>
+                      </table>
+                      </div>
+                  </div>`;
+              } else if (d.nvme_attrs && d.nvme_attrs.length > 0) {
+                  const rows = d.nvme_attrs.map(a => {
+                      const warn = (a.name.includes('Error') && a.raw > 0) || (a.name.includes('Critical') && a.raw > 0);
+                      return `<tr>
+                          <td class="py-0.5 pr-3 text-slate-300 text-[10px]">${a.name}</td>
+                          <td class="py-0.5 text-right font-mono text-[10px] ${warn ? 'text-rose-400 font-bold' : 'text-slate-200'}">${a.raw ?? '—'}</td>
+                      </tr>`;
+                  }).join('');
+                  attrsHtml = `
+                  <div>
+                      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">NVMe Health Info</div>
+                      <table class="w-full text-left"><tbody>${rows}</tbody></table>
+                  </div>`;
+              }
+
+              // --- last self-test ---
+              let testHtml = '';
+              if (d.last_test) {
+                  const st = d.last_test.status || '';
+                  const passed = /completed without error|success|pass/i.test(st);
+                  const failed = /fail/i.test(st);
+                  const badge = passed
+                      ? `<span class="text-emerald-400 font-bold">${st}</span>`
+                      : failed
+                      ? `<span class="text-rose-400 font-bold">${st}</span>`
+                      : `<span class="text-slate-400">${st || '—'}</span>`;
+                  testHtml = `<div class="flex items-center gap-2 text-[10px]">
+                      <span class="text-slate-500">Last Self-Test:</span>
+                      <span class="text-slate-400">${d.last_test.type || ''}</span>
+                      ${badge}
+                      ${d.last_test.hours ? `<span class="text-slate-600">@ ${d.last_test.hours} hrs</span>` : ''}
+                  </div>`;
+              }
+
+              body.innerHTML = `
+                  <div class="flex items-center gap-3 flex-wrap">
+                      ${healthBadge}
+                      ${d.temp != null ? `<span class="text-sm font-bold ${tempColor(d.temp)}"><i class="fa-solid fa-thermometer-half mr-1"></i>${d.temp}°C</span>` : ''}
+                  </div>
+                  <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/40">${infoGrid}</div>
+                  ${attrsHtml ? `<div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/40">${attrsHtml}</div>` : ''}
+                  ${testHtml ? `<div class="bg-slate-800/50 rounded-xl px-3 py-2 border border-slate-700/40">${testHtml}</div>` : ''}
+              `;
+          } catch(e) {
+              body.innerHTML = `<div class="text-rose-400 text-center py-8"><i class="fa-solid fa-triangle-exclamation mr-2 text-xl"></i><br><span class="text-sm mt-2 block">${e.message}</span></div>`;
+          }
+      }
+
+      function escHtml(s) {
+          return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+
+      // ---- SMART Modal ----
+      async function openSmartModal(clickedLabel) {
+          const modal = document.getElementById('smart-modal');
+          const body  = document.getElementById('smart-modal-body');
+          const title = document.getElementById('smart-modal-title');
+          title.textContent = 'Physical Disk Health';
+          body.innerHTML = `<div class="flex items-center gap-3 text-slate-400 py-6 justify-center"><i class="fa-solid fa-spinner animate-spin text-cyan-400 text-xl"></i><span>Loading SMART data…</span></div>`;
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+
+          try {
+              const res = await fetch('/api/smart');
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const data = await res.json();
+              if (data.error) throw new Error(data.error);
+
+              const disks = data.disks || [];
+              if (!disks.length) {
+                  body.innerHTML = `<p class="text-slate-400 text-center py-6">No physical disk data available.</p>`;
+                  return;
+              }
+
+              const typeIcon = (t) => {
+                  if (t === 'NVMe') return '<i class="fa-solid fa-bolt text-purple-400 mr-1"></i>';
+                  if (t === 'SSD')  return '<i class="fa-solid fa-memory text-cyan-400 mr-1"></i>';
+                  return '<i class="fa-solid fa-hard-drive text-slate-400 mr-1"></i>';
+              };
+              const tempColor = (t) => {
+                  if (t == null) return 'text-slate-500';
+                  if (t >= 55) return 'text-rose-400';
+                  if (t >= 45) return 'text-amber-400';
+                  return 'text-emerald-400';
+              };
+              const statusBadge = (s) => {
+                  if (!s || s === 'N/A') return `<span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 text-[10px] font-bold">N/A</span>`;
+                  const upper = s.toUpperCase();
+                  if (upper === 'SUCCESS' || upper === 'PASSED' || upper === 'PASS')
+                      return `<span class="px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-400 text-[10px] font-bold border border-emerald-700/50"><i class="fa-solid fa-check mr-1"></i>${s}</span>`;
+                  if (upper === 'FAILED' || upper === 'FAIL' || upper === 'SELFTEST_FAILED#1')
+                      return `<span class="px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-400 text-[10px] font-bold border border-rose-700/50"><i class="fa-solid fa-xmark mr-1"></i>${s}</span>`;
+                  return `<span class="px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-400 text-[10px] font-bold border border-amber-700/50">${s}</span>`;
+              };
+              const fmtSize = (bytes) => {
+                  if (!bytes) return '—';
+                  const tb = bytes / 1e12;
+                  if (tb >= 0.9) return tb.toFixed(1) + ' TB';
+                  return (bytes / 1e9).toFixed(0) + ' GB';
+              };
+
+              body.innerHTML = disks.map(d => `
+                <div class="bg-slate-800/60 border border-slate-700/50 rounded-xl p-3 lg:p-4 flex flex-col gap-2">
+                  <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-sm font-mono font-bold text-slate-200">${d.name}</span>
+                      <span class="text-xs text-slate-400 truncate">${typeIcon(d.type)}${d.type}</span>
+                    </div>
+                    <div class="${tempColor(d.temp)} font-bold text-sm shrink-0">
+                      ${d.temp != null ? `<i class="fa-solid fa-thermometer-half mr-1"></i>${d.temp}°C` : '<span class="text-slate-600">No temp</span>'}
+                    </div>
+                  </div>
+                  <div class="text-xs text-slate-400 truncate" title="${d.model}">${d.model || '—'}</div>
+                  <div class="text-[10px] text-slate-500 font-mono">S/N: ${d.serial || '—'} &nbsp;|&nbsp; ${fmtSize(d.size)}</div>
+                  <div class="flex items-center gap-2 mt-1 flex-wrap">
+                    <span class="text-[10px] text-slate-500 uppercase tracking-wider">Last SMART:</span>
+                    ${statusBadge(d.smart_status)}
+                    ${d.smart_test_type ? `<span class="text-[10px] text-slate-500">${d.smart_test_type}</span>` : ''}
+                    ${d.smart_test_age ? `<span class="text-[10px] text-slate-600">${d.smart_test_age}</span>` : ''}
+                  </div>
+                </div>
+              `).join('');
+          } catch(e) {
+              body.innerHTML = `<div class="text-rose-400 text-center py-6"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${e.message}</div>`;
+          }
+      }
+
+      function closeSmartModal() {
+          const modal = document.getElementById('smart-modal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+      }
+
+      // ---- SSH 憑證管理 ----
+      function getSshCreds() {
+          return {
+              user: sessionStorage.getItem('ssh_user') || '',
+              pass: sessionStorage.getItem('ssh_pass') || ''
+          };
+      }
+
+      function setSshCreds(user, pass) {
+          sessionStorage.setItem('ssh_user', user);
+          sessionStorage.setItem('ssh_pass', pass);
+      }
+
+      function clearSshCreds() {
+          sessionStorage.removeItem('ssh_user');
+          sessionStorage.removeItem('ssh_pass');
+      }
+
+      // 取得憑證，若無則先彈窗，之後執行 callback
+      function requireSshCreds(callback) {
+          try {
+              const creds = getSshCreds();
+              if (creds.pass) {
+                  callback(creds);
+                  return;
+              }
+              const modal = document.getElementById('ssh-creds-modal');
+              if (!modal) {
+                  console.error('ssh-creds-modal element not found!');
+                  const pass = prompt('請輸入 SSH sudo 密碼：');
+                  if (pass) {
+                      const user = '{{ truenas_ssh_user }}';
+                      setSshCreds(user, pass);
+                      callback({ user, pass });
+                  }
+                  return;
+              }
+              const userInput = document.getElementById('ssh-creds-user');
+              const passInput = document.getElementById('ssh-creds-pass');
+              userInput.value = creds.user || '{{ truenas_ssh_user }}';
+              passInput.value = '';
+              modal.classList.remove('hidden');
+              modal.classList.add('flex');
+              modal._callback = callback;
+              setTimeout(() => passInput.focus(), 100);
+          } catch(e) {
+              console.error('requireSshCreds error:', e);
+              const pass = prompt('請輸入 SSH sudo 密碼：');
+              if (pass) {
+                  const user = '{{ truenas_ssh_user }}';
+                  setSshCreds(user, pass);
+                  callback({ user, pass });
+              }
+          }
+      }
+
+      function confirmSshCreds() {
+          const modal = document.getElementById('ssh-creds-modal');
+          const user = document.getElementById('ssh-creds-user').value.trim();
+          const pass = document.getElementById('ssh-creds-pass').value;
+          if (!pass) {
+              document.getElementById('ssh-creds-error').textContent = '請輸入密碼';
+              return;
+          }
+          document.getElementById('ssh-creds-error').textContent = '';
+          setSshCreds(user, pass);
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          if (typeof modal._callback === 'function') modal._callback({ user, pass });
+      }
+
+      function closeSshCredsModal() {
+          const modal = document.getElementById('ssh-creds-modal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+      }
     </script>
+
+    <!-- SSH 憑證輸入 Modal -->
+    <div id="ssh-creds-modal" class="hidden fixed inset-0 z-[60] items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div class="liquid-glass rounded-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <h2 class="text-base font-bold text-slate-100"><i class="fa-solid fa-key mr-2 text-amber-400"></i>SSH 憑證</h2>
+          <button onclick="closeSshCredsModal()" class="text-slate-400 hover:text-white transition text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-700/50">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="p-5 flex flex-col gap-4">
+          <p class="text-xs text-slate-400">用於透過 SSH 執行 <code class="text-cyan-400 bg-slate-800 px-1 rounded">sudo smartctl</code>，包含硬碟溫度讀取與 SMART 詳細資訊。密碼僅存於本次瀏覽器 Session，不會傳送至伺服器以外的地方。</p>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-slate-400">SSH 使用者名稱</label>
+            <input id="ssh-creds-user" type="text" class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-slate-400">SSH 密碼</label>
+            <input id="ssh-creds-pass" type="password" class="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+              onkeydown="if(event.key==='Enter')confirmSshCreds()" />
+          </div>
+          <p id="ssh-creds-error" class="text-xs text-rose-400 -mt-2 min-h-[1em]"></p>
+          <div class="flex gap-2">
+            <button onclick="confirmSshCreds()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded-lg text-sm transition">確認</button>
+            <button onclick="closeSshCredsModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 rounded-lg text-sm transition">取消</button>
+          </div>
+          <button onclick="clearSshCreds();closeSshCredsModal();" class="text-xs text-slate-600 hover:text-slate-400 transition text-center">清除已儲存的憑證</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SMART Modal -->
+    <div id="smart-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/60 backdrop-blur-sm p-4" onclick="if(event.target===this)closeSmartModal()">
+      <div class="liquid-glass rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+          <h2 class="text-lg font-bold text-slate-100" id="smart-modal-title"><i class="fa-solid fa-shield-heart mr-2 text-cyan-400"></i>Physical Disk Health</h2>
+          <button onclick="closeSmartModal()" class="text-slate-400 hover:text-white transition text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-700/50">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="smart-modal-body" class="flex-1 overflow-y-auto hidden-scrollbar p-4 flex flex-col gap-3"></div>
+      </div>
+    </div>
   </body>
 </html>
 

@@ -13,6 +13,7 @@ from functools import lru_cache
 import concurrent.futures
 import base64
 import io
+import shlex
 
 import urllib3
 import requests
@@ -65,6 +66,7 @@ SPEC_CPU_MODEL = os.getenv("SPEC_CPU_MODEL", "Intel Core i5-12400").strip()
 SPEC_RAM_TEXT = os.getenv("SPEC_RAM_TEXT", "64GB DDR4 ECC").strip()
 SPEC_POOL1_TEXT = os.getenv("SPEC_POOL1_TEXT", "4x 8TB HDD").strip()
 SPEC_POOL2_TEXT = os.getenv("SPEC_POOL2_TEXT", "2x 1TB NVMe").strip()
+SPEC_GPU_TEXT = os.getenv("SPEC_GPU_TEXT", "NVIDIA Tesla P4 8GB").strip()
 
 TRUENAS_INTERFACE_NET1 = os.getenv("TRUENAS_INTERFACE_NET1", "eno1").strip()
 TRUENAS_INTERFACE_NET2 = os.getenv("TRUENAS_INTERFACE_NET2", "enp3s0").strip()
@@ -79,6 +81,7 @@ APPS_CONFIG = [
             {"name": "Jellyseerr", "port": 5055, "icon": "jellyseerr.png"},
             {"name": "Navidrome", "port": 4533, "icon": "navidrome.png"},
             {"name": "MusicTag", "port": 8002, "icon": "musictag.png"},
+            {"name": "Immich", "port": 2283, "icon": "immich.png"},
         ]
     },
     {
@@ -147,7 +150,7 @@ def _fetch_truenas(path: str, params: dict | None = None) -> dict | list:
             url,
             headers=_build_headers(),
             params=params,
-            timeout=2, # Reduced timeout for responsiveness
+            timeout=5, # Increased timeout for responsiveness
             verify=verify_ssl,
         )
         response.raise_for_status()
@@ -164,7 +167,7 @@ def _post_truenas(path: str, json_data: dict | None = None) -> dict | list:
             url,
             headers=_build_headers(),
             json=json_data,
-            timeout=3, # Reduced timeout
+            timeout=5, # Increased timeout
             verify=verify_ssl,
         )
         response.raise_for_status()
@@ -225,7 +228,7 @@ def _fetch_netdata(path: str, params: dict | None = None) -> dict | None:
         response = requests.get(
             f"{base_url}{path}",
             params=params,
-            timeout=1, # Very short timeout for Netdata (local/LAN)
+            timeout=2, # Increased timeout for Netdata
             verify=verify_ssl,
             headers=headers,
         )
@@ -298,6 +301,34 @@ def _calc_cpu_usage(latest: dict[str, float] | None) -> float | None:
     if "user" in latest and "system" in latest:
         return max(0.0, latest["user"] + latest["system"])
     return None
+
+
+def _get_gpu_stats() -> dict | None:
+    try:
+        import subprocess
+        # Get utilization.gpu, temperature.gpu, memory.used, memory.total
+        cmd = ['nvidia-smi', '--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total', '--format=csv,noheader,nounits']
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1)
+        
+        if result.returncode != 0:
+            return None
+            
+        line = result.stdout.strip()
+        if not line:
+            return None
+            
+        parts = [x.strip() for x in line.split(',')]
+        if len(parts) < 4:
+            return None
+            
+        return {
+            "utilization": float(parts[0]),
+            "temperature": float(parts[1]),
+            "memory_used": float(parts[2]),
+            "memory_total": float(parts[3])
+        }
+    except Exception:
+        return None
 
 
 def _calc_memory(latest: dict[str, float] | None) -> dict[str, float] | None:
@@ -478,22 +509,99 @@ def _get_disk_info() -> list[dict] | None:
             "type": disk_type,
             "description": description
         })
-        
+
+    # --- Fallback: for disks with no temperature (e.g. SATA-over-USB bridges),
+    #     try smartctl with SAT passthrough via SSH. ---
+    missing_temp = [d for d in result if d["temp"] is None]
+    if missing_temp and (os.getenv("SSH_PRIVATE_KEY_B64") or os.getenv("SSH_PASSWORD")):
+        import json as _json
+
+        def _fetch_temp_sat(disk: dict) -> int | None:
+            dev = f"/dev/{disk['name']}"
+            for dtype in ("sat", "sat,auto"):
+                try:
+                    out, _ = _ssh_exec(f"sudo smartctl -d {dtype} --json -A {dev}", timeout=15)
+                    if not out.strip():
+                        continue
+                    sj = _json.loads(out)
+                    t = (sj.get("temperature") or {}).get("current")
+                    if t is not None:
+                        app.logger.info(f"Temp fallback via -d {dtype} for {dev}: {t}°C")
+                        return t
+                except Exception as e:
+                    app.logger.debug(f"Temp fallback failed for {dev} (dtype={dtype}): {e}")
+            return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {ex.submit(_fetch_temp_sat, d): d for d in missing_temp}
+            for fut, disk in futures.items():
+                try:
+                    t = fut.result(timeout=20)
+                    if t is not None:
+                        disk["temp"] = t
+                except Exception:
+                    pass
+
     return result
+
+
+def _get_system_info_truenas() -> dict:
+    # Cache for a long time (e.g. 1 hour) as hardware doesn't change often
+    try:
+        info = _fetch_truenas_cached("/api/v2.0/system/info", cache_duration=3600)
+    except Exception as e:
+        app.logger.warning(f"Failed to fetch system info: {e}")
+        return {}
+    
+    # "model" in system/info is usually the chassis/mobo model (e.g. "Generic")
+    # "cpu_model" is the actual processor name
+    cpu_model = info.get("cpu_model", "")
+    if not cpu_model:
+        # Fallback if cpu_model is missing
+        cpu_model = info.get("model", "")
+
+    physmem = info.get("physmem", 0)
+    
+    ram_str = ""
+    if physmem:
+        gib = physmem / (1024 ** 3)
+        # If very close to integer, show integer
+        if abs(gib - round(gib)) < 0.1:
+            ram_str = f"{int(round(gib))}GB"
+        else:
+            ram_str = f"{gib:.1f}GB"
+            
+    # Clean up CPU text
+    # Example: Intel(R) Core(TM) i5-12400 CPU @ 2.50GHz -> Intel Core i5-12400
+    if cpu_model:
+        cpu_model = cpu_model.replace("(R)", "").replace("(TM)", "").replace("CPU", "").split("@")[0].strip()
+        # Remove extra spaces
+        cpu_model = " ".join(cpu_model.split())
+        
+    return {
+        "cpu_model": cpu_model,
+        "ram_text": ram_str
+    }
 
 
 @app.route("/")
 def index() -> str:
+    # Fixed CPU and RAM as requested
+    final_cpu = "Intel Xeon E3-1230v3 @3.30GHz"
+    final_ram = "32GiB DDR3"
+
     return render_template(
         "index.html",
         netdata_host=NETDATA_HOST,
         netdata_port=NETDATA_PORT,
         netdata_url=NETDATA_URL,
-        spec_cpu=SPEC_CPU_MODEL,
-        spec_ram=SPEC_RAM_TEXT,
+        spec_cpu=final_cpu,
+        spec_ram=final_ram,
         spec_pool1=SPEC_POOL1_TEXT,
         spec_pool2=SPEC_POOL2_TEXT,
+        spec_gpu=SPEC_GPU_TEXT,
         truenas_ip=TRUENAS_DISPLAY_IP,
+        truenas_ssh_user=os.getenv('SSH_USER', 'root'),
         apps=APPS_CONFIG,
     )
 
@@ -501,8 +609,16 @@ def index() -> str:
 @app.route("/api/metrics")
 def api_metrics():
     try:
+        # Defaults
+        gpu_stats = None
+        cpu_usage = 0.0
+        memory = None
+        cpu_temp = None
+        disks = []
+        nets = []
+        
+        # Use a timeout for futures to prevent blocking indefinitely
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            # Parallel Fetching
             f_cpu = executor.submit(_netdata_latest, NETDATA_CHART_CPU)
             f_ram = executor.submit(_netdata_latest, NETDATA_CHART_RAM)
             f_temp = executor.submit(_netdata_latest, NETDATA_CHART_CPU_TEMP)
@@ -516,18 +632,30 @@ def api_metrics():
             f_store_1 = executor.submit(_get_truenas_dataset_usage, "/mnt/storage", "storage (/mnt/storage)")
             f_store_2 = executor.submit(_get_truenas_dataset_usage, "/mnt/Apps", "Apps (/mnt/Apps)")
 
-            cpu_latest = f_cpu.result()
-            ram_latest = f_ram.result()
-            temp_latest = f_temp.result()
+            # Safe result retrieval with default None
+            def get_res(f):
+                try:
+                    return f.result(timeout=6) if f else None
+                except Exception as e:
+                    app.logger.warning(f"Future timed out or failed: {e}")
+                    return None
+
+            cpu_latest = get_res(f_cpu)
+            ram_latest = get_res(f_ram)
+            temp_latest = get_res(f_temp)
             
-            net1_chart_res = f_n1_chart.result() if f_n1_chart else None
-            net1_iface_res = f_n1_iface.result() if f_n1_iface else None
+            net1_chart_res = get_res(f_n1_chart)
+            net1_iface_res = get_res(f_n1_iface)
             
-            net2_chart_res = f_n2_chart.result() if f_n2_chart else None
-            net2_iface_res = f_n2_iface.result() if f_n2_iface else None
+            net2_chart_res = get_res(f_n2_chart)
+            net2_iface_res = get_res(f_n2_iface)
             
-            storage_disk = f_store_1.result()
-            apps_disk = f_store_2.result()
+            storage_disk = get_res(f_store_1)
+            apps_disk = get_res(f_store_2)
+
+
+        # Run GPU check in main thread or pool (fast enough)
+        gpu_stats = _get_gpu_stats()
 
         cpu_temp = _calc_cpu_temp(temp_latest)
 
@@ -570,6 +698,7 @@ def api_metrics():
 
         return jsonify(
             {
+                "gpu": gpu_stats,
                 "system_ip": TRUENAS_DISPLAY_IP,
                 "cpu_usage": cpu_usage,
                 "cpu_temp": cpu_temp,
@@ -578,13 +707,20 @@ def api_metrics():
                 "nets": nets,
             }
         )
-    except requests.exceptions.RequestException as exc:
-        return (
-            jsonify(_format_request_error("Failed to reach Netdata", exc)),
-            502,
-        )
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({"error": "Unexpected error", "details": str(exc)}), 500
+    except Exception as exc:  # Catch all to ensure JSON return
+        app.logger.error(f"Metrics Error: {exc}")
+        # Return partial/empty structure to prevent frontend hanging
+        return jsonify({
+            "gpu": None,
+            "system_ip": TRUENAS_DISPLAY_IP,
+            "cpu_usage": 0,
+            "cpu_temp": None,
+            "memory": None,
+            "disks": [],
+            "nets": [],
+            "error": str(exc)
+        })
+
 
 
 @app.route("/api/netdata/charts")
@@ -890,6 +1026,388 @@ sudo() {{
 init_ssh_connection()
 
 
+
+def _parse_smartctl_json(sj: dict, disk_name: str) -> dict:
+    """Extract user-friendly fields from a smartctl -j JSON blob."""
+    import math
+
+    def _gb(b):
+        if not b:
+            return "—"
+        tb = b / 1e12
+        if tb >= 0.9:
+            return f"{tb:.1f} TB"
+        gb = b / 1e9
+        return f"{gb:.0f} GB"
+
+    # ---- health ----
+    passed = None
+    ss = sj.get("smart_status") or {}
+    if "passed" in ss:
+        passed = ss["passed"]
+    # NVMe critical_warning → 0 means healthy
+    nvme_log = sj.get("nvme_smart_health_information_log") or {}
+    if passed is None and nvme_log:
+        passed = (nvme_log.get("critical_warning", 1) == 0)
+
+    # ---- device info ----
+    model       = sj.get("model_name") or sj.get("model_family") or ""
+    serial      = sj.get("serial_number") or ""
+    firmware    = sj.get("firmware_version") or ""
+    cap_bytes   = (sj.get("user_capacity") or {}).get("bytes") or 0
+    form_factor = (sj.get("form_factor") or {}).get("name") or ""
+    rotation    = sj.get("rotation_rate")
+    if rotation == 0:
+        media_type = "SSD"
+    elif isinstance(rotation, int) and rotation > 0:
+        media_type = f"HDD ({rotation} RPM)"
+    else:
+        media_type = "NVMe" if "nvme" in disk_name.lower() else "—"
+
+    ata_version  = (sj.get("ata_version") or {}).get("string") or ""
+    sata_version = (sj.get("sata_version") or {}).get("string") or ""
+    interface    = sata_version or ata_version
+
+    # ---- time-based stats ----
+    power_on_h   = (sj.get("power_on_time") or {}).get("hours")
+    power_cycles = sj.get("power_cycle_count")
+    temp_c       = (sj.get("temperature") or {}).get("current")
+    if temp_c is None and nvme_log:
+        k = nvme_log.get("temperature")
+        if k:
+            temp_c = k - 273
+    # Prefer SMART attribute 194 (Temperature_Celsius) raw value when available,
+    # because TrueNAS /disk/temperatures also uses attr 194. The SCT temperature
+    # returned in temperature.current can differ by ~10°C on some drives (e.g. Intel SSDs).
+    # Note: some manufacturers pack min/max temps into the upper bytes of the 48-bit raw
+    # value (e.g. 68719476769 = 0x10_0000_0021). The actual current temp is always in
+    # the lowest 8 bits (& 0xFF). If that still looks bogus (> 100°C), fall back to
+    # temperature.current.
+    for entry in (sj.get("ata_smart_attributes") or {}).get("table") or []:
+        if entry.get("id") == 194:
+            raw194 = (entry.get("raw") or {}).get("value")
+            if raw194 is not None:
+                # Extract lowest byte for the actual current temperature
+                t194 = int(raw194) & 0xFF
+                if 0 < t194 < 100:
+                    temp_c = t194
+                elif temp_c is None:
+                    # Last resort: trust the raw value if nothing else available
+                    temp_c = t194
+            break
+
+    # ---- ATA SMART attributes ----
+    key_attr_ids = {
+        1:   "Raw Read Error Rate",
+        5:   "Reallocated Sectors",
+        9:   "Power-On Hours",
+        177: "Wear Leveling Count",
+        183: "Runtime Bad Blocks",
+        187: "Reported Uncorrectable",
+        194: "Temperature",
+        196: "Reallocation Events",
+        197: "Current Pending Sectors",
+        199: "UDMA CRC Errors",
+        231: "SSD Life Left (%)",
+        241: "Total Host Writes (GiB)",
+        242: "Total Host Reads (GiB)",
+    }
+    attrs = []
+    for entry in (sj.get("ata_smart_attributes") or {}).get("table") or []:
+        aid = entry.get("id")
+        if aid not in key_attr_ids:
+            continue
+        raw_val = (entry.get("raw") or {}).get("value")
+        # Attr 194: manufacturers pack min/max into upper bytes; mask to lowest byte
+        if aid == 194 and raw_val is not None:
+            raw_val = int(raw_val) & 0xFF
+        value   = entry.get("value")
+        worst   = entry.get("worst")
+        thresh  = entry.get("thresh")
+        failed  = entry.get("when_failed") or ""
+        attrs.append({
+            "id":      aid,
+            "name":    key_attr_ids[aid],
+            "value":   value,
+            "worst":   worst,
+            "thresh":  thresh,
+            "raw":     raw_val,
+            "failed":  failed,
+        })
+
+    # ---- NVMe specific ----
+    nvme_attrs = []
+    if nvme_log:
+        mapping = [
+            ("critical_warning",     "Critical Warning"),
+            ("available_spare",      "Available Spare (%)"),
+            ("percentage_used",      "Percentage Used (%)"),
+            ("media_errors",         "Media Errors"),
+            ("num_err_log_entries",  "Error Log Entries"),
+            ("power_on_hours",       "Power-On Hours"),
+            ("power_cycles",         "Power Cycles"),
+        ]
+        for key, label in mapping:
+            v = nvme_log.get(key)
+            if v is not None:
+                nvme_attrs.append({"name": label, "raw": v})
+
+    # ---- error log ----
+    err_count = None
+    elog = sj.get("ata_smart_error_log") or {}
+    if "summary" in elog:
+        err_count = elog["summary"].get("count", 0)
+    elif nvme_log:
+        err_count = nvme_log.get("num_err_log_entries", 0)
+
+    # ---- last self-test ----
+    last_test = None
+    for section in ["ata_smart_self_test_log", "nvme_self_test_log"]:
+        tlog = sj.get(section) or {}
+        table = tlog.get("standard", {}).get("table") or tlog.get("table") or []
+        if table:
+            t = table[0]
+            last_test = {
+                "type":   t.get("type", {}).get("string") or t.get("type") or "",
+                "status": t.get("status", {}).get("string") or t.get("status") or "",
+                "hours":  t.get("lifetime_hours") or t.get("power_on_hours"),
+            }
+            break
+
+    return {
+        "disk":         disk_name,
+        "model":        model,
+        "serial":       serial,
+        "firmware":     firmware,
+        "capacity":     _gb(cap_bytes),
+        "form_factor":  form_factor,
+        "media_type":   media_type,
+        "interface":    interface,
+        "health_passed": passed,
+        "temp":         temp_c,
+        "power_on_h":   power_on_h,
+        "power_cycles": power_cycles,
+        "attrs":        attrs,
+        "nvme_attrs":   nvme_attrs,
+        "error_count":  err_count,
+        "last_test":    last_test,
+    }
+
+
+def _shlex_quote(s: str) -> str:
+    return shlex.quote(s)
+
+
+def _ssh_exec(cmd: str, timeout: int = 30, user: str | None = None, password: str | None = None, sudo_password: str | None = None) -> tuple[str, str]:
+    """Open a fresh exec channel via SSH and return (stdout, stderr).
+    If sudo_password is provided, it will be written to stdin for sudo -S.
+    """
+    host = TRUENAS_HOST
+    _user = user or os.getenv('SSH_USER', 'root')
+    _password = password or os.getenv('SSH_PASSWORD')
+    b64_key = os.getenv('SSH_PRIVATE_KEY_B64')
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        if b64_key:
+            key_str = base64.b64decode(b64_key).decode('utf-8')
+            try:
+                pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(key_str))
+            except Exception:
+                pkey = paramiko.RSAKey.from_private_key(io.StringIO(key_str))
+            client.connect(host, username=_user, pkey=pkey, timeout=10)
+        else:
+            client.connect(host, username=_user, password=_password, timeout=10)
+
+        stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
+        if sudo_password:
+            stdin.write(sudo_password + '\n')
+            stdin.flush()
+            stdin.channel.shutdown_write()
+        out = stdout.read().decode('utf-8', errors='replace')
+        err = stderr.read().decode('utf-8', errors='replace')
+        return out, err
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+
+@app.route("/api/smart/<disk_name>")
+def api_smart_disk(disk_name):
+    import json as _json
+    from flask import request as flask_request
+
+    ssh_user = flask_request.headers.get("X-SSH-User", "").strip() or os.getenv("SSH_USER", "root")
+    ssh_pass = flask_request.headers.get("X-SSH-Pass", "").strip()
+
+    # Allow caller to force a specific smartctl device type (e.g. "sat", "sat,auto", "usbcypress")
+    # Useful for SATA-over-USB bridges that need explicit SAT passthrough.
+    forced_device_type = flask_request.args.get("device_type", "").strip()
+
+    try:
+        if not disk_name.startswith("/dev/"):
+            dev_path = f"/dev/{disk_name}"
+        else:
+            dev_path = disk_name
+
+        def run_smart(args_suffix: str) -> tuple[str, str]:
+            if ssh_pass:
+                # Use sudo -S -p '' to read password from stdin (no prompt output)
+                cmd = f"sudo -S -p '' smartctl {args_suffix} {dev_path}"
+                return _ssh_exec(cmd, timeout=30, user=ssh_user, password=ssh_pass, sudo_password=ssh_pass)
+            else:
+                cmd = f"sudo smartctl {args_suffix} {dev_path}"
+                return _ssh_exec(cmd, timeout=30, user=ssh_user)
+
+        # Check for auth failure in output
+        def _auth_failed(out: str) -> bool:
+            lower = out.lower()
+            return "incorrect password" in lower or "authentication failure" in lower or \
+                   ("sudo:" in lower and "password is required" in lower and "incorrect" in lower)
+
+        def _smart_json_useful(sj: dict) -> bool:
+            """Return True if the JSON blob contains meaningful SMART data."""
+            if not sj:
+                return False
+            # smartctl exit_status: bit 1 set means "device not supported"
+            exit_status = (sj.get("smartctl") or {}).get("exit_status", 0)
+            if exit_status & 0x02:  # bit 1 = device open failed / unsupported
+                return False
+            ss = sj.get("smart_status") or {}
+            has_status  = "passed" in ss
+            has_attrs   = bool((sj.get("ata_smart_attributes") or {}).get("table"))
+            has_nvme    = bool(sj.get("nvme_smart_health_information_log"))
+            has_support = (sj.get("smart_support") or {}).get("available", True)
+            return has_support and (has_status or has_attrs or has_nvme)
+
+        # Build list of device type attempts:
+        # If caller forced a type, try only that. Otherwise try default then common USB fallbacks.
+        if forced_device_type:
+            device_type_attempts = [forced_device_type]
+        else:
+            # "" = smartctl default, then SAT (covers most USB-SATA bridges)
+            device_type_attempts = ["", "sat", "sat,auto"]
+
+        smart_json = None
+        for dtype in device_type_attempts:
+            dtype_flag = f"-d {dtype} " if dtype else ""
+            try:
+                out, err = run_smart(f"{dtype_flag}--json -a")
+                combined = out + err
+                if _auth_failed(combined):
+                    return jsonify({"auth_failed": True, "disk": disk_name}), 200
+                if out.strip():
+                    try:
+                        candidate = _json.loads(out)
+                        if _smart_json_useful(candidate):
+                            smart_json = candidate
+                            if dtype:
+                                # Surface the device type used so the UI can show it
+                                app.logger.info(f"smartctl: used -d {dtype} for {dev_path}")
+                            break
+                        elif smart_json is None:
+                            # Keep the first result as last-resort fallback
+                            smart_json = candidate
+                    except Exception:
+                        pass
+            except Exception as e:
+                app.logger.debug(f"smartctl JSON via SSH failed for {dev_path} (dtype={dtype!r}): {e}")
+
+        if smart_json:
+            parsed = _parse_smartctl_json(smart_json, disk_name)
+            # Annotate with the device type hint used (helps UI surface the workaround)
+            used_dtype = forced_device_type or next(
+                (d for d in device_type_attempts if d and _smart_json_useful(smart_json)), ""
+            )
+            if used_dtype:
+                parsed["device_type_hint"] = used_dtype
+            return jsonify(parsed)
+
+        # Attempt: plain text (last resort)
+        for dtype in device_type_attempts:
+            dtype_flag = f"-d {dtype} " if dtype else ""
+            try:
+                out, err = run_smart(f"{dtype_flag}-a")
+                combined = out + err
+                if _auth_failed(combined):
+                    return jsonify({"auth_failed": True, "disk": disk_name}), 200
+                text_out = out or err or "No output from smartctl"
+                return jsonify({"disk": disk_name, "raw_text": text_out})
+            except Exception as e:
+                app.logger.debug(f"smartctl plain-text via SSH failed for {dev_path} (dtype={dtype!r}): {e}")
+
+        return jsonify({"error": "smartctl returned no usable output", "disk": disk_name}), 502
+
+    except Exception as exc:
+        app.logger.error(f"SMART disk API Error [{disk_name}]: {exc}")
+        return jsonify({"error": str(exc), "disk": disk_name}), 500
+
+
+@app.route("/api/smart")
+def api_smart():
+    try:
+        if not TRUENAS_HOST or not TRUENAS_API_KEY:
+            return jsonify({"error": "Missing TRUENAS_HOST or TRUENAS_API_KEY"}), 500
+
+        disks_info = _get_disk_info()
+        if not disks_info:
+            return jsonify({"disks": []})
+
+        # Try to get SMART test results (may not be available on all versions)
+        smart_results: dict[str, dict] = {}
+        try:
+            results = _fetch_truenas("/api/v2.0/smart/test/results")
+            if isinstance(results, list):
+                for r in results:
+                    disk_name = r.get("disk")
+                    if not disk_name:
+                        continue
+                    # Keep the most recent result per disk
+                    if disk_name not in smart_results:
+                        smart_results[disk_name] = r
+        except Exception as e:
+            app.logger.debug(f"SMART test results not available: {e}")
+
+        enriched = []
+        for disk in disks_info:
+            name = disk.get("name", "")
+            sr = smart_results.get(name, {})
+
+            status = sr.get("status") or sr.get("result") or "N/A"
+            test_type = sr.get("type") or sr.get("testtype") or ""
+            # age string
+            test_age = ""
+            if sr.get("lifetime"):
+                test_age = f"{sr['lifetime']}h runtime"
+
+            enriched.append({
+                "name": name,
+                "model": disk.get("model", ""),
+                "serial": disk.get("serial", ""),
+                "size": disk.get("size", 0),
+                "temp": disk.get("temp"),
+                "type": disk.get("type", "HDD"),
+                "smart_status": status,
+                "smart_test_type": test_type,
+                "smart_test_age": test_age,
+            })
+
+        return jsonify({"disks": enriched})
+
+    except Exception as exc:
+        app.logger.error(f"SMART API Error: {exc}")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    return response
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5003, debug=True, allow_unsafe_werkzeug=True)
